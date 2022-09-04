@@ -1,4 +1,4 @@
 module "cloudsource" {
   source = "../../"
-  name   = var.name
+  name   = "pike"
 }
