@@ -61,6 +61,25 @@ No modules.
 ## Role and Permissions
 
 <!-- BEGINNING OF PRE-COMMIT-PIKE DOCS HOOK -->
+The Terraform resource required is:
+
+```golang
+
+resource "google_project_iam_custom_role" "terraform_pike" {
+  project     = "pike"
+  role_id     = "terraform_pike"
+  title       = "terraform_pike"
+  description = "A user with least privileges"
+  permissions = [
+    "source.repos.create",
+    "source.repos.delete",
+    "source.repos.get",
+    "source.repos.updateRepoConfig"
+  ]
+}
+
+
+```
 <!-- END OF PRE-COMMIT-PIKE DOCS HOOK -->
 
 ## Related Projects
