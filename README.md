@@ -43,7 +43,7 @@ No modules.
 
 | Name | Type |
 |------|------|
-| [google_pubsub_topic.topikepic](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/pubsub_topic) | resource |
+| [google_pubsub_topic.pike](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/pubsub_topic) | resource |
 | [google_service_account.pike](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/service_account) | resource |
 | [google_sourcerepo_repository.example](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/sourcerepo_repository) | resource |
 
