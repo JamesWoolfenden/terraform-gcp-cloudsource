@@ -1,6 +1,6 @@
 # terraform-gcp-cloudsource
 
-[![Build Status](https://github.com/JamesWoolfenden/terraform-gcp-cloudsource/workflows/Bump%20version/badge.svg?branch=master)](https://github.com/JamesWoolfenden/terraform-gcp-cloudsource)
+[![Build Status](https://github.com/JamesWoolfenden/terraform-gcp-cloudsource/workflows/Verify/badge.svg?branch=master)](https://github.com/JamesWoolfenden/terraform-gcp-cloudsource)
 [![Latest Release](https://img.shields.io/github/release/JamesWoolfenden/terraform-gcp-cloudsource.svg)](https://github.com/JamesWoolfenden/terraform-gcp-cloudsource/releases/latest)
 [![GitHub tag (latest SemVer)](https://img.shields.io/github/tag/JamesWoolfenden/terraform-gcp-cloudsource.svg?label=latest)](https://github.com/JamesWoolfenden/terraform-gcp-cloudsource/releases/latest)
 ![Terraform Version](https://img.shields.io/badge/tf-%3E%3D0.14.0-blue.svg)
@@ -102,7 +102,7 @@ Please use the [issue tracker](https://github.com/jameswoolfenden/terraform-gcp-
 
 ## Copyrights
 
-Copyright © 2019-2022 James Woolfenden
+Copyright © 2019-2023 James Woolfenden
 
 ## License
 
