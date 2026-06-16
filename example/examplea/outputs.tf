@@ -1,3 +1,4 @@
 output "repository" {
-  value = module.cloudsource.repository
+  description = "ID of the created Cloud Source Repository"
+  value       = module.cloudsource.repository
 }

@@ -1,0 +1,53 @@
+{
+  "findings": [
+    {
+      "confidence": "high",
+      "explanation": "google_sourcerepo_repository.pike wires service_account_email = google_service_account.pike.email into its pubsub_configs, but no google_pubsub_topic_iam_member or google_pubsub_topic_iam_binding in the module grants that SA roles/pubsub.publisher on google_pubsub_topic.pike. Without this grant, Cloud Source Repositories cannot deliver notification messages, silently breaking any CI/CD pipelines or security-scan triggers that depend on commit events. A rules engine cannot detect this three-resource composition gap (CSR \u2192 SA \u2192 topic with the IAM grant missing).",
+      "file": "google_sourcerepo_repository.example.tf",
+      "id": "HOLDEN_AI_001",
+      "line": 6,
+      "principle": "reliability",
+      "related_resources": [
+        "google_service_account.pike",
+        "google_pubsub_topic.pike"
+      ],
+      "remediation": "Add a google_pubsub_topic_iam_member resource to the module:\n\nresource \"google_pubsub_topic_iam_member\" \"pike_publisher\" {\n  topic  = google_pubsub_topic.pike.id\n  role   = \"roles/pubsub.publisher\"\n  member = \"serviceAccount:${google_service_account.pike.email}\"\n}",
+      "resource": "google_sourcerepo_repository.pike",
+      "severity": "HIGH",
+      "title": "Service account in CSR pubsub_configs has no roles/pubsub.publisher IAM binding on the topic"
+    },
+    {
+      "confidence": "high",
+      "explanation": "variables.tf:11 declares variable 'key' as type = string, but google_pubsub_topic.tf:3 accesses var.key.id (object-attribute notation on a string, which Terraform rejects). The example at example/examplea/module.cloudsource.tf:5 passes the full google_kms_crypto_key resource object, which Terraform will also reject against a string-typed variable. The practical result is that kms_key_name on the Pub/Sub topic cannot resolve correctly: callers who pass a plain string get a plan error on .id access; callers who pass an object get a type-constraint rejection. CMEK encryption is effectively non-functional as written.",
+      "file": "variables.tf",
+      "id": "HOLDEN_AI_002",
+      "line": 11,
+      "principle": "encryption",
+      "related_resources": [
+        "google_kms_crypto_key.example_crypto_key"
+      ],
+      "remediation": "Change the variable declaration in variables.tf to accept the KMS key object:\n\nvariable \"key\" {\n  type = object({\n    id = string\n  })\n  description = \"KMS CryptoKey resource used for CMEK encryption\"\n  validation {\n    condition     = length(trim(var.key.id)) > 0\n    error_message = \"The key id must not be empty.\"\n  }\n}",
+      "resource": "google_pubsub_topic.pike",
+      "severity": "MEDIUM",
+      "title": "Variable 'key' declared as string but used as object \u2014 CMEK configuration is broken"
+    },
+    {
+      "confidence": "high",
+      "explanation": "outputs.tf:2 exports value = google_sourcerepo_repository.example, but the only google_sourcerepo_repository declared in this module is named 'pike' (google_sourcerepo_repository.example.tf:1). Terraform will abort with 'Reference to undeclared resource' on every plan, making the module entirely non-functional for callers.",
+      "file": "outputs.tf",
+      "id": "HOLDEN_AI_003",
+      "line": 2,
+      "principle": "maintainability",
+      "remediation": "Fix the output reference in outputs.tf:\n\noutput \"repository\" {\n  description = \"The source repository\"\n  value       = google_sourcerepo_repository.pike\n}",
+      "resource": "google_sourcerepo_repository.pike",
+      "severity": "LOW",
+      "title": "outputs.tf references non-existent resource google_sourcerepo_repository.example (resource is named .pike)"
+    }
+  ],
+  "suggested_policies": [
+    {
+      "rationale": "google_sourcerepo_repository has zero deterministic rule coverage. When pubsub_configs is present and service_account_email is omitted, GCP defaults to the Cloud Source Repositories service agent, which may hold broader permissions on the Pub/Sub topic than a dedicated least-privilege SA. Requiring an explicit service_account_email is a concrete, attribute-level check expressible with the current DSL.",
+      "yaml": "id: HLD_PROPOSED_001\nname: Cloud Source Repository Pub/Sub configs must specify an explicit service account\nprinciple: identity-and-access\nseverity: MEDIUM\nrationale: |\n  When google_sourcerepo_repository configures pubsub_configs without an explicit\n  service_account_email, GCP uses the Cloud Source Repositories service agent.\n  A dedicated, explicitly specified service account enforces least privilege for\n  repository event notifications and makes the IAM grant auditable and reviewable.\nremediation: |\n  Add service_account_email to all pubsub_configs blocks pointing at a\n  dedicated least-privilege service account:\n\n  resource \"google_sourcerepo_repository\" \"example\" {\n    pubsub_configs {\n      topic                 = google_pubsub_topic.notifications.id\n      message_format        = \"JSON\"\n      service_account_email = google_service_account.csr_notifier.email\n    }\n  }\nresources:\n  google_sourcerepo_repository:\n    path: pubsub_configs.service_account_email\n    not_null: true\n"
+    }
+  ]
+}
