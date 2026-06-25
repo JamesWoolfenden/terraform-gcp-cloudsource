@@ -2,52 +2,25 @@
   "findings": [
     {
       "confidence": "high",
-      "explanation": "google_sourcerepo_repository.pike wires service_account_email = google_service_account.pike.email into its pubsub_configs, but no google_pubsub_topic_iam_member or google_pubsub_topic_iam_binding in the module grants that SA roles/pubsub.publisher on google_pubsub_topic.pike. Without this grant, Cloud Source Repositories cannot deliver notification messages, silently breaking any CI/CD pipelines or security-scan triggers that depend on commit events. A rules engine cannot detect this three-resource composition gap (CSR \u2192 SA \u2192 topic with the IAM grant missing).",
-      "file": "google_sourcerepo_repository.example.tf",
+      "explanation": "The module call sets `key = google_kms_crypto_key.cloudsource.name`, which resolves to the bare key name (e.g. \"example-key\"), but `var.key` flows straight into `google_pubsub_topic.pike.kms_key_name` (google_pubsub_topic.tf:3), which requires the fully-qualified resource path `projects/{project}/locations/{location}/keyRings/{keyRing}/cryptoKeys/{name}`. A rules engine can't catch this because both `.name` and `.id` are valid, non-null string attributes on `google_kms_crypto_key` \u2014 the policy DSL has no notion of 'this string must be the other attribute'. At apply time this will either fail GCP API validation or silently misconfigure CMEK, depending on provider version, leaving the topic without the intended customer-managed encryption guarantee shown in the example.",
+      "file": "example/examplea/module.cloudsource.tf",
       "id": "HOLDEN_AI_001",
-      "line": 6,
-      "principle": "reliability",
-      "related_resources": [
-        "google_service_account.pike",
-        "google_pubsub_topic.pike"
-      ],
-      "remediation": "Add a google_pubsub_topic_iam_member resource to the module:\n\nresource \"google_pubsub_topic_iam_member\" \"pike_publisher\" {\n  topic  = google_pubsub_topic.pike.id\n  role   = \"roles/pubsub.publisher\"\n  member = \"serviceAccount:${google_service_account.pike.email}\"\n}",
-      "resource": "google_sourcerepo_repository.pike",
-      "severity": "HIGH",
-      "title": "Service account in CSR pubsub_configs has no roles/pubsub.publisher IAM binding on the topic"
-    },
-    {
-      "confidence": "high",
-      "explanation": "variables.tf:11 declares variable 'key' as type = string, but google_pubsub_topic.tf:3 accesses var.key.id (object-attribute notation on a string, which Terraform rejects). The example at example/examplea/module.cloudsource.tf:5 passes the full google_kms_crypto_key resource object, which Terraform will also reject against a string-typed variable. The practical result is that kms_key_name on the Pub/Sub topic cannot resolve correctly: callers who pass a plain string get a plan error on .id access; callers who pass an object get a type-constraint rejection. CMEK encryption is effectively non-functional as written.",
-      "file": "variables.tf",
-      "id": "HOLDEN_AI_002",
-      "line": 11,
+      "line": 5,
       "principle": "encryption",
       "related_resources": [
-        "google_kms_crypto_key.example_crypto_key"
+        "google_kms_crypto_key.cloudsource",
+        "google_pubsub_topic.pike"
       ],
-      "remediation": "Change the variable declaration in variables.tf to accept the KMS key object:\n\nvariable \"key\" {\n  type = object({\n    id = string\n  })\n  description = \"KMS CryptoKey resource used for CMEK encryption\"\n  validation {\n    condition     = length(trim(var.key.id)) > 0\n    error_message = \"The key id must not be empty.\"\n  }\n}",
-      "resource": "google_pubsub_topic.pike",
+      "remediation": "Change `key = google_kms_crypto_key.cloudsource.name` to `key = google_kms_crypto_key.cloudsource.id` in example/examplea/module.cloudsource.tf:5.",
+      "resource": "module.cloudsource",
       "severity": "MEDIUM",
-      "title": "Variable 'key' declared as string but used as object \u2014 CMEK configuration is broken"
-    },
-    {
-      "confidence": "high",
-      "explanation": "outputs.tf:2 exports value = google_sourcerepo_repository.example, but the only google_sourcerepo_repository declared in this module is named 'pike' (google_sourcerepo_repository.example.tf:1). Terraform will abort with 'Reference to undeclared resource' on every plan, making the module entirely non-functional for callers.",
-      "file": "outputs.tf",
-      "id": "HOLDEN_AI_003",
-      "line": 2,
-      "principle": "maintainability",
-      "remediation": "Fix the output reference in outputs.tf:\n\noutput \"repository\" {\n  description = \"The source repository\"\n  value       = google_sourcerepo_repository.pike\n}",
-      "resource": "google_sourcerepo_repository.pike",
-      "severity": "LOW",
-      "title": "outputs.tf references non-existent resource google_sourcerepo_repository.example (resource is named .pike)"
+      "title": "CMEK reference passes KMS key short name instead of full resource ID to the module's `key` variable"
     }
   ],
   "suggested_policies": [
     {
-      "rationale": "google_sourcerepo_repository has zero deterministic rule coverage. When pubsub_configs is present and service_account_email is omitted, GCP defaults to the Cloud Source Repositories service agent, which may hold broader permissions on the Pub/Sub topic than a dedicated least-privilege SA. Requiring an explicit service_account_email is a concrete, attribute-level check expressible with the current DSL.",
-      "yaml": "id: HLD_PROPOSED_001\nname: Cloud Source Repository Pub/Sub configs must specify an explicit service account\nprinciple: identity-and-access\nseverity: MEDIUM\nrationale: |\n  When google_sourcerepo_repository configures pubsub_configs without an explicit\n  service_account_email, GCP uses the Cloud Source Repositories service agent.\n  A dedicated, explicitly specified service account enforces least privilege for\n  repository event notifications and makes the IAM grant auditable and reviewable.\nremediation: |\n  Add service_account_email to all pubsub_configs blocks pointing at a\n  dedicated least-privilege service account:\n\n  resource \"google_sourcerepo_repository\" \"example\" {\n    pubsub_configs {\n      topic                 = google_pubsub_topic.notifications.id\n      message_format        = \"JSON\"\n      service_account_email = google_service_account.csr_notifier.email\n    }\n  }\nresources:\n  google_sourcerepo_repository:\n    path: pubsub_configs.service_account_email\n    not_null: true\n"
+      "rationale": "google_sourcerepo_repository_iam_member/_binding have zero policy coverage today (coverage_by_type returns none), yet this module's own google_sourcerepo_repository_iam_member.binding (google_sourcerepo_repository_iam_member.tf) grants roles straight from an unvalidated `var.iam_bindings` map of role -> member strings, with no guard against a caller passing allUsers or allAuthenticatedUsers as a member. This is the exact same risk shape already covered for Pub/Sub topics (HLD_GCP_153) and subscriptions (HLD_GCP_161) \u2014 Cloud Source Repositories deserves the same deterministic check, and the condition (member string must not be allUsers/allAuthenticatedUsers) is unambiguous and broadly applicable to any Terraform using these resource types.",
+      "yaml": "id: HLD_PROPOSED_002\nname: Cloud Source Repository IAM bindings must not grant access to allUsers or allAuthenticatedUsers\nprinciple: network-security\nseverity: CRITICAL\nrationale: |\n  Granting allUsers or allAuthenticatedUsers on a Cloud Source Repository IAM\n  binding allows anyone on the internet to read or write source code in the\n  repository, including any secrets or credentials committed to history. The\n  repository should only be accessible to specific service accounts or groups.\nremediation: |\n  Remove the allUsers/allAuthenticatedUsers member from the repository IAM\n  binding.\nresources:\n  google_sourcerepo_repository_iam_member:\n    path: member\n    not_one_of:\n      - allUsers\n      - allAuthenticatedUsers\n  google_sourcerepo_repository_iam_binding:\n    all:\n      - path: members\n        not_contains: allUsers\n      - path: members\n        not_contains: allAuthenticatedUsers\n"
     }
   ]
 }

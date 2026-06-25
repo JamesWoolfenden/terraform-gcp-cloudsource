@@ -2,7 +2,7 @@
 module "cloudsource" {
   source = "../../"
   name   = "pike"
-  key    = google_kms_crypto_key.example_crypto_key.name
+  key    = google_kms_crypto_key.cloudsource.id
   iam_bindings = {
     "roles/source.reader" = ["serviceAccount:${google_service_account.reader.email}"]
     "roles/source.writer" = ["serviceAccount:${google_service_account.writer.email}"]
@@ -10,7 +10,7 @@ module "cloudsource" {
 }
 
 
-resource "google_kms_crypto_key" "example_crypto_key" {
+resource "google_kms_crypto_key" "cloudsource" {
   name            = "example-key"
   key_ring        = google_kms_key_ring.cloudsource.id
   rotation_period = "7776000s"

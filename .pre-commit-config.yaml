@@ -32,7 +32,7 @@ repos:
     -   id: shell-lint
         exclude: template|\.template$
 -   repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: e72a3ca1632f0b11a07d171449fe447a7ff6795e # v0.48.0
+    rev: a4d5d37e66ebcd6b3705204a1d6dbb56dea66338 # v0.49.0
     hooks:
     -   id: markdownlint
 -   repo: https://github.com/jameswoolfenden/pre-commit
@@ -43,7 +43,7 @@ repos:
     -   id: tf2docs
         language_version: python3.11
 -   repo: https://github.com/bridgecrewio/checkov
-    rev: 807eb133d5262412e1eda79c7495fd8145a59920 # 3.3.1
+    rev: c9497de1a03aa5b930ab2e06441692942099ef5a # 3.3.2
     hooks:
     -   id: checkov
         files: .
@@ -55,11 +55,11 @@ repos:
     -   id: pike-docs-go
         args: ["readme","-d", ".", "-i"]
 -   repo: 'https://github.com/rhysd/actionlint'
-    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
     hooks:
       - id: actionlint
 -   repo: https://github.com/jameswoolfenden/ghat
-    rev: 4d552d40dfe1c98d1cf9aab3009a5f9d61c9852f # v0.1.44
+    rev: 958de333cd2bd86156d3f7ed24850d0fafca22c6 # v0.1.45
     hooks:
     -   id: ghat-go
     -   id: ghat-go-sift
