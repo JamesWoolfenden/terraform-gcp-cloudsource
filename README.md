@@ -69,7 +69,7 @@ No modules.
 The Terraform resource required is:
 
 ```golang
-
+# apply role
 resource "google_project_iam_custom_role" "terraform_pike" {
   project     = "pike-477416"
   role_id     = "terraform_pike"
@@ -93,6 +93,21 @@ resource "google_project_iam_custom_role" "terraform_pike" {
     "source.repos.getIamPolicy",
     "source.repos.setIamPolicy",
     "source.repos.updateRepoConfig"
+  ]
+}
+
+# plan role
+resource "google_project_iam_custom_role" "terraform_pike_plan" {
+  project     = "pike-477416"
+  role_id     = "terraform_pike_plan"
+  title       = "terraform_pike_plan"
+  description = "A user with least privileges"
+  permissions = [
+    "iam.serviceAccounts.get",
+    "pubsub.topics.get",
+    "pubsub.topics.getIamPolicy",
+    "source.repos.get",
+    "source.repos.getIamPolicy"
   ]
 }
 
