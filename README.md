@@ -40,26 +40,40 @@ No modules.
 
 | Name | Type |
 | ---- | ---- |
+| [google_pubsub_subscription.dead_letter](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/pubsub_subscription) | resource |
+| [google_pubsub_subscription.pike](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/pubsub_subscription) | resource |
+| [google_pubsub_subscription_iam_member.pike_subscriber](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/pubsub_subscription_iam_member) | resource |
+| [google_pubsub_topic.dead_letter](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/pubsub_topic) | resource |
 | [google_pubsub_topic.pike](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/pubsub_topic) | resource |
+| [google_pubsub_topic_iam_member.dead_letter_publisher](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/pubsub_topic_iam_member) | resource |
 | [google_pubsub_topic_iam_member.pike_publisher](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/pubsub_topic_iam_member) | resource |
 | [google_service_account.pike](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/service_account) | resource |
 | [google_sourcerepo_repository.pike](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/sourcerepo_repository) | resource |
+| [google_sourcerepo_repository_iam_binding.readers](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/sourcerepo_repository_iam_binding) | resource |
 | [google_sourcerepo_repository_iam_member.binding](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/sourcerepo_repository_iam_member) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
+| <a name="input_ack_deadline_seconds"></a> [ack\_deadline\_seconds](#input\_ack\_deadline\_seconds) | Seconds Pub/Sub waits for the subscriber to acknowledge a notification before redelivering it | `number` | `20` | no |
+| <a name="input_create_subscription"></a> [create\_subscription](#input\_create\_subscription) | Create a pull subscription (plus a dead-letter topic and its own subscription) for the repository notification topic. Off by default: without a subscription every notification the repository emits is discarded, so enable this unless a consumer attaches its own subscription to the exported topic | `bool` | `false` | no |
+| <a name="input_dead_letter_max_delivery_attempts"></a> [dead\_letter\_max\_delivery\_attempts](#input\_dead\_letter\_max\_delivery\_attempts) | Delivery attempts before a notification is forwarded to the dead-letter topic | `number` | `5` | no |
 | <a name="input_iam_bindings"></a> [iam\_bindings](#input\_iam\_bindings) | Map of IAM role to list of members to grant on the Cloud Source Repository, e.g. { "roles/source.reader" = ["user:alice@example.com"] } | `map(list(string))` | n/a | yes |
-| <a name="input_key"></a> [key](#input\_key) | Key for Pub/Sub access | `string` | n/a | yes |
+| <a name="input_key"></a> [key](#input\_key) | Fully-qualified Cloud KMS crypto key ID used to encrypt the notification Pub/Sub topic, e.g. projects/p/locations/global/keyRings/r/cryptoKeys/k | `string` | n/a | yes |
+| <a name="input_message_retention_duration"></a> [message\_retention\_duration](#input\_message\_retention\_duration) | How long the notification topic retains published messages for replay, as a duration in seconds (e.g. 604800s for 7 days, the Pub/Sub maximum) | `string` | `"604800s"` | no |
 | <a name="input_name"></a> [name](#input\_name) | Name of the Cloud Source repository or resource | `string` | n/a | yes |
+| <a name="input_pubsub_service_agent_email"></a> [pubsub\_service\_agent\_email](#input\_pubsub\_service\_agent\_email) | Email of the Pub/Sub service agent (service-PROJECT\_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com). Required when var.create\_subscription is true, so the agent can publish to the dead-letter topic and subscribe to the notification subscription | `string` | `null` | no |
+| <a name="input_repository_readers"></a> [repository\_readers](#input\_repository\_readers) | Principals granted roles/source.reader on the repository, authoritatively for that role. Empty to create no binding | `list(string)` | `[]` | no |
 
 ## Outputs
 
 | Name | Description |
 | ---- | ----------- |
+| <a name="output_dead_letter_topic"></a> [dead\_letter\_topic](#output\_dead\_letter\_topic) | The dead-letter topic, or null when var.create\_subscription is false |
 | <a name="output_repository"></a> [repository](#output\_repository) | The source repository |
 | <a name="output_sa"></a> [sa](#output\_sa) | Details on the SA |
+| <a name="output_subscription"></a> [subscription](#output\_subscription) | The notification subscription, or null when var.create\_subscription is false |
 | <a name="output_topic"></a> [topic](#output\_topic) | Details of the Topic |
 <!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->
 
@@ -81,8 +95,17 @@ resource "google_project_iam_custom_role" "terraform_pike" {
     "iam.serviceAccounts.delete",
     "iam.serviceAccounts.get",
     "iam.serviceAccounts.update",
+    "pubsub.subscriptions.create",
+    "pubsub.subscriptions.delete",
+    "pubsub.subscriptions.get",
+    "pubsub.subscriptions.getIamPolicy",
+    "pubsub.subscriptions.list",
+    "pubsub.subscriptions.setIamPolicy",
+    "pubsub.subscriptions.update",
+    "pubsub.topics.attachSubscription",
     "pubsub.topics.create",
     "pubsub.topics.delete",
+    "pubsub.topics.detachSubscription",
     "pubsub.topics.get",
     "pubsub.topics.getIamPolicy",
     "pubsub.topics.setIamPolicy",
@@ -104,6 +127,9 @@ resource "google_project_iam_custom_role" "terraform_pike_plan" {
   description = "A user with least privileges"
   permissions = [
     "iam.serviceAccounts.get",
+    "pubsub.subscriptions.get",
+    "pubsub.subscriptions.getIamPolicy",
+    "pubsub.subscriptions.list",
     "pubsub.topics.get",
     "pubsub.topics.getIamPolicy",
     "source.repos.get",
