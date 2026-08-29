@@ -1,0 +1,90 @@
+{
+  "findings": [
+    {
+      "confidence": "high",
+      "explanation": "The module encrypts its notification topic with a customer-managed key (kms_key_name = var.key), and the example supplies google_kms_crypto_key.cloudsource.id. Nothing anywhere grants the Pub/Sub P4SA (service-<project>@gcp-sa-pubsub.iam.gserviceaccount.com) roles/cloudkms.cryptoKeyEncrypterDecrypter on that key, so topic creation is rejected by the API and terraform apply fails on a clean project. At the module root holden can only return UNKNOWN for HLD_GCP_458 and HLD_GCP_463 because var.key is an unbound module input; scanning example/examplea resolves it and HLD_GCP_458 fails there outright. Reported here because .holden.yaml scans '.' with targets [gha], so the module-root gate never sees the resolved verdict.",
+      "file": "example/examplea/module.cloudsource.tf",
+      "first_seen": "2026-08-28",
+      "fix": "resource \"google_project_service_identity\" \"pubsub\" {\n  provider = google-beta\n  project  = var.project\n  service  = \"pubsub.googleapis.com\"\n}\n\nresource \"google_kms_crypto_key_iam_member\" \"pubsub_cmek\" {\n  crypto_key_id = google_kms_crypto_key.cloudsource.id\n  role          = \"roles/cloudkms.cryptoKeyEncrypterDecrypter\"\n  member        = \"serviceAccount:${google_project_service_identity.pubsub.email}\"\n}",
+      "fixable": true,
+      "id": "HOLDEN_AI_001",
+      "last_seen": "2026-08-28",
+      "line": 13,
+      "principle": "encryption",
+      "related_resources": [
+        "module.cloudsource.google_pubsub_topic.pike",
+        "google_kms_key_ring.cloudsource"
+      ],
+      "remediation": "Add the service identity and the key grant to example/examplea, and make the topic depend on the grant so ordering is deterministic (this is what HLD_GCP_463 is checking). google_project_service_identity requires the google-beta provider, which the example's required_providers must also declare.",
+      "resource": "google_kms_crypto_key.cloudsource",
+      "severity": "HIGH",
+      "status": "fixed",
+      "supersedes": "HLD_GCP_458",
+      "suppression_reason": null,
+      "title": "CMEK-encrypted Pub/Sub topic has no key grant for the Pub/Sub service agent, so the example cannot apply",
+      "verification": "HLD_GCP_458 no longer fails and HLD_GCP_463 resolved from UNKNOWN to pass at example/examplea; tofu validate clean."
+    },
+    {
+      "confidence": "high",
+      "explanation": "var.repository_readers carries an explicit validation rejecting allUsers and allAuthenticatedUsers. var.iam_bindings grants IAM on the same repository through google_sourcerepo_repository_iam_member.binding and carries no such guard, so a consumer can pass { \"roles/source.reader\" = [\"allUsers\"] } and publish the entire source repository, including anything ever committed to its history, to the internet. This is the inconsistency pattern: the author clearly intends the guard, and applied it to the newer variable but not the older one. holden's HLD_GCP_312 targets exactly this and returns UNKNOWN at both roots because member resolves through a for_each over an unbound map, so the engine cannot decide it either way.",
+      "file": "variables.tf",
+      "first_seen": "2026-08-28",
+      "fix": "  validation {\n    condition = !anytrue([\n      for members in values(var.iam_bindings) : anytrue([\n        for m in members : contains([\"allUsers\", \"allAuthenticatedUsers\"], m)\n      ])\n    ])\n    error_message = \"var.iam_bindings must not grant allUsers or allAuthenticatedUsers on the repository.\"\n  }",
+      "fixable": true,
+      "id": "HOLDEN_AI_002",
+      "last_seen": "2026-08-28",
+      "line": 21,
+      "principle": "network-security",
+      "related_resources": [
+        "google_sourcerepo_repository_iam_member.binding",
+        "variable.repository_readers"
+      ],
+      "remediation": "Mirror the guard that var.repository_readers already has onto every member list in var.iam_bindings, so the module refuses public grants at plan time regardless of which variable the consumer uses.",
+      "resource": "variable.iam_bindings",
+      "severity": "HIGH",
+      "status": "fixed",
+      "supersedes": "HLD_GCP_312",
+      "suppression_reason": null,
+      "title": "var.iam_bindings has no allUsers/allAuthenticatedUsers guard, while var.repository_readers on the same repository does",
+      "verification": "Verified empirically: passing {\"roles/source.reader\" = [\"allUsers\"]} now fails tofu validate with the new error message. HLD_GCP_312 still reports UNKNOWN by design \u2014 holden evaluates resource attributes, not variable validation blocks, so the engine cannot observe this guard."
+    },
+    {
+      "confidence": "medium",
+      "explanation": "Google announced on 2024-06-17 that Cloud Source Repositories is no longer available to projects that had not previously used it. The service still runs for existing users but is not receiving feature work, and a deprecated service is one that stops receiving security hardening while remaining in the blast radius. No deterministic rule covers service-lifecycle status, since it is external product information rather than a config attribute. This is a roadmap concern rather than an exploitable weakness \u2014 flagged so it is a deliberate decision rather than an unnoticed one.",
+      "file": "google_sourcerepo_repository.pike.tf",
+      "first_seen": "2026-08-28",
+      "fixable": false,
+      "id": "HOLDEN_AI_003",
+      "last_seen": "2026-08-28",
+      "line": 1,
+      "principle": "patch-management",
+      "related_resources": [
+        "google_sourcerepo_repository_iam_member.binding",
+        "google_sourcerepo_repository_iam_binding.readers"
+      ],
+      "remediation": "No code change. Confirm the consuming projects are grandfathered in, and record whether this module is intentionally maintenance-only. If new consumers are expected, plan a migration to Secure Source Manager or an external Git host.",
+      "resource": "google_sourcerepo_repository.pike",
+      "severity": "LOW",
+      "status": "open",
+      "suppression_reason": null,
+      "title": "Module is built on Cloud Source Repositories, which Google closed to new customers in June 2024",
+      "unresolved_since": "2026-08-28"
+    }
+  ],
+  "scan_date": "2026-08-28T00:00:00Z",
+  "scan_path": ".",
+  "suggested_policies": [],
+  "suggested_suppressions": [
+    {
+      "confidence": "high",
+      "file": "variables.tf",
+      "line": 11,
+      "outcome": "User marked var.key sensitive = true instead of suppressing HLD_TF_050. That propagated the sensitivity to output.topic and output.dead_letter_topic, which holden then flagged as HLD_TF_080; both outputs were marked sensitive = true in response. Both policies now pass.",
+      "policy_id": "HLD_TF_050",
+      "reason": "var.key is matched on its name alone, but it holds a Cloud KMS crypto key resource ID, not key material. It is assigned only to google_pubsub_topic.kms_key_name, and the example supplies google_kms_crypto_key.cloudsource.id \u2014 a non-sensitive computed attribute. A key ID of the form projects/<p>/locations/<l>/keyRings/<r>/cryptoKeys/<k> is a public identifier that appears in IAM policy documents and the GCP console; it grants nothing on its own. This is the reference-to-a-secret vs literal-secret distinction. Marking it sensitive = true would also redact kms_key_name from plan output, making CMEK misconfiguration harder to review at the point where review matters.",
+      "resource": "variable.key",
+      "status": "declined",
+      "suppression_comment": "# holden:ignore:HLD_TF_050: var.key is a KMS crypto key resource ID (a public identifier), not key material \u2014 nothing secret to redact"
+    }
+  ]
+}
